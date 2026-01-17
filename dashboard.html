@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predictor Admin Panel</title>
+    <style>
+        /* --- ADMIN THEME (Dark Blue & Cyan) --- */
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #02040a;
+            color: #e2e8f0;
+            margin: 0;
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* SIDEBAR */
+        .sidebar {
+            width: 250px;
+            background: #0b1120;
+            border-right: 1px solid #1e293b;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo {
+            font-size: 20px; font-weight: bold; color: #fff;
+            margin-bottom: 40px; letter-spacing: 1px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .logo span { color: #00E5FF; font-size: 24px; }
+
+        .menu-item {
+            padding: 12px 15px; margin-bottom: 5px;
+            border-radius: 8px; cursor: pointer;
+            color: #94a3b8; font-size: 14px; font-weight: 600;
+            transition: all 0.2s;
+        }
+        .menu-item:hover, .menu-item.active {
+            background: rgba(0, 229, 255, 0.1);
+            color: #00E5FF;
+        }
+
+        /* MAIN CONTENT */
+        .main-content {
+            flex: 1; padding: 30px; overflow-y: auto;
+        }
+
+        header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 30px;
+        }
+        h1 { margin: 0; font-size: 24px; color: #fff; }
+
+        /* STATS CARDS */
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px; margin-bottom: 30px;
+        }
+        .card {
+            background: #0f172a; border: 1px solid #1e293b;
+            padding: 20px; border-radius: 12px;
+        }
+        .card h3 { margin: 0 0 10px 0; font-size: 12px; color: #94a3b8; text-transform: uppercase; }
+        .card .number { font-size: 28px; font-weight: bold; color: #fff; }
+        .card.highlight { border-color: #00E5FF; background: rgba(0, 229, 255, 0.05); }
+
+        /* USER LISTS */
+        .section-title { font-size: 16px; margin-bottom: 15px; color: #fff; border-left: 3px solid #00E5FF; padding-left: 10px; }
+
+        .user-card {
+            background: #0f172a; border: 1px solid #1e293b;
+            padding: 15px; border-radius: 8px; margin-bottom: 10px;
+            display: flex; justify-content: space-between; align-items: center;
+            transition: transform 0.2s;
+        }
+        .user-card:hover { transform: translateY(-2px); border-color: #334155; }
+
+        .user-info div { font-size: 14px; color: #fff; font-weight: bold; }
+        .user-info small { font-size: 11px; color: #64748b; }
+        
+        .status-badge {
+            padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase;
+        }
+        .status-pending { background: #7c2d12; color: #fdba74; }
+        .status-approved { background: #064e3b; color: #34d399; }
+        .status-rejected { background: #450a0a; color: #fca5a5; }
+
+        /* BUTTONS */
+        .actions { display: flex; gap: 10px; }
+        button {
+            border: none; padding: 6px 12px; border-radius: 4px;
+            font-size: 11px; font-weight: bold; cursor: pointer;
+            text-transform: uppercase;
+        }
+        .btn-approve { background: #00E5FF; color: #000; }
+        .btn-approve:hover { background: #00b8cc; }
+        
+        .btn-ban { background: #1e293b; color: #ef4444; border: 1px solid #ef4444; }
+        .btn-ban:hover { background: #ef4444; color: white; }
+
+        .btn-delete { background: transparent; color: #64748b; }
+        .btn-delete:hover { color: #fff; }
+
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="logo"><span>❖</span> ADMIN PANEL</div>
+        <div class="menu-item active">Dashboard</div>
+        <div class="menu-item">User Management</div>
+        <div class="menu-item" style="margin-top: auto; color: #ef4444;" onclick="logout()">Log Out</div>
+    </div>
+
+    <div class="main-content">
+        <header>
+            <h1>Overview</h1>
+            <div style="font-size: 12px; color: #00E5FF;">● SECURE CONNECTION</div>
+        </header>
+
+        <div class="stats-grid">
+            <div class="card highlight">
+                <h3>Pending Requests</h3>
+                <div class="number" id="count-pending">0</div>
+            </div>
+            <div class="card">
+                <h3>Active Users</h3>
+                <div class="number" id="count-approved">0</div>
+            </div>
+            <div class="card">
+                <h3>Total Devices</h3>
+                <div class="number" id="count-total">0</div>
+            </div>
+        </div>
+
+        <div class="section-title">PENDING APPROVALS (PAYMENT RECEIVED?)</div>
+        <div id="pending-list">
+            <div style="padding: 20px; text-align: center; color: #64748b;">Loading requests...</div>
+        </div>
+
+        <div class="section-title" style="margin-top: 40px;">ACTIVE USER DATABASE</div>
+        <div id="active-list">
+            <div style="padding: 20px; text-align: center; color: #64748b;">Loading users...</div>
+        </div>
+    </div>
+
+<script type="module">
+  // 1. IMPORT FIREBASE
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+  import { getFirestore, collection, query, onSnapshot, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+  import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
+
+  // 2. CONFIGURATION (Same as login)
+  const firebaseConfig = {
+    apiKey: "AIzaSyDjlO86QiBbiEr-DHawKzcx8NMAnz0rsfE",
+    authDomain: "aviator-buget.firebaseapp.com",
+    projectId: "aviator-buget",
+    storageBucket: "aviator-buget.firebasestorage.app",
+    messagingSenderId: "148875365800",
+    appId: "1:148875365800:web:a9d7a09c1732870e94a19d",
+    measurementId: "G-3258PXYNZD"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
+
+  // 3. AUTH CHECK (Admin must be logged in)
+  onAuthStateChanged(auth, (user) => {
+      if (!user) {
+          // If not logged in, go back to login page
+          window.location.href = "index.html"; 
+      }
+  });
+
+  window.logout = () => {
+      signOut(auth).then(() => window.location.href = "index.html");
+  };
+
+  // 4. LISTEN TO DATABASE
+  const q = query(collection(db, "device_whitelist"));
+
+  onSnapshot(q, (snapshot) => {
+      const pendingContainer = document.getElementById('pending-list');
+      const activeContainer = document.getElementById('active-list');
+      
+      pendingContainer.innerHTML = "";
+      activeContainer.innerHTML = "";
+
+      let pendingCount = 0;
+      let approvedCount = 0;
+
+      if (snapshot.empty) {
+          pendingContainer.innerHTML = "<div style='color:#64748b; padding:10px;'>No data found.</div>";
+          return;
+      }
+
+      snapshot.forEach((snap) => {
+          const data = snap.data();
+          const id = snap.id;
+
+          // Count stats
+          if (data.status === 'pending') pendingCount++;
+          if (data.status === 'approved') approvedCount++;
+
+          // Create HTML Card
+          const card = document.createElement('div');
+          card.className = 'user-card';
+          
+          // Format date safely
+          const dateStr = data.requestDate ? new Date(data.requestDate).toLocaleDateString() : 'N/A';
+          // Clean User Agent
+          const deviceName = data.deviceName ? data.deviceName.substring(0, 30) + '...' : 'Unknown Device';
+
+          card.innerHTML = `
+              <div class="user-info">
+                  <div>${data.email || 'No Email'}</div>
+                  <small>${deviceName} • ${dateStr}</small>
+                  <div style="margin-top:5px;">
+                      <span class="status-badge status-${data.status}">${data.status}</span>
+                  </div>
+              </div>
+              <div class="actions">
+                  ${data.status === 'pending' ? 
+                      `<button class="btn-approve" onclick="updateStatus('${id}', 'approved')">Approve Access</button>` : 
+                      ''}
+                  
+                  ${data.status === 'approved' ? 
+                      `<button class="btn-ban" onclick="updateStatus('${id}', 'rejected')">Block / Ban</button>` : 
+                      ''}
+
+                   ${data.status === 'rejected' ? 
+                      `<button class="btn-approve" onclick="updateStatus('${id}', 'approved')">Unban</button>` : 
+                      ''}
+                  
+                  <button class="btn-delete" onclick="deleteUser('${id}')">✕</button>
+              </div>
+          `;
+
+          // Sort into correct list
+          if (data.status === 'pending') {
+              pendingContainer.appendChild(card);
+          } else {
+              activeContainer.appendChild(card);
+          }
+      });
+
+      // Update Stats Numbers
+      document.getElementById('count-pending').innerText = pendingCount;
+      document.getElementById('count-approved').innerText = approvedCount;
+      document.getElementById('count-total').innerText = snapshot.size;
+  });
+
+  // 5. GLOBAL FUNCTIONS FOR BUTTONS
+  window.updateStatus = async (id, newStatus) => {
+      try {
+          await updateDoc(doc(db, "device_whitelist", id), {
+              status: newStatus
+          });
+      } catch (error) {
+          alert("Error: " + error.message);
+      }
+  };
+
+  window.deleteUser = async (id) => {
+      if(confirm("Are you sure you want to delete this user history?")) {
+          await deleteDoc(doc(db, "device_whitelist", id));
+      }
+  };
+
+</script>
+
+</body>
+</html>
